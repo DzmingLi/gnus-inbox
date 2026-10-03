@@ -1,0 +1,64 @@
+#+title: gnus-inbox
+
+* Installation
+
+Clone this repository, add its directory to ~load-path~, then enable it:
+
+#+begin_src emacs-lisp
+(with-eval-after-load 'gnus
+  (require 'gnus-inbox)
+  (gnus-inbox-enable))
+#+end_src
+
+Requires Emacs 30.1 or later.  Supports built-in GNU Gnus and Commercial
+Gnus; when using Commercial Gnus, load it before any built-in Gnus library.
+~gnus-thread-reader~ is optional.  No backend-specific adapter is required.
+
+* Behavior
+
+Treat every Gnus group as an inbox, independent of its backend.  Call
+~gnus-inbox-enable~ during Gnus setup.  It installs the inbox display rule
+for existing groups and a fallback rule for groups subscribed later.
+
+- ~gnus-inbox-read-later~ records a =read-later= mark.
+- ~gnus-inbox-archive~ saves the article in Gnus's cache and
+  records an =archive= mark in the source group's Gnus state.
+- ~gnus-inbox-delete~ records a separate =trash= mark and hides
+  the article locally.  It does not delete anything from a remote site.
+- ~gnus-inbox-restore~ clears all three marks.
+- ~gnus-inbox-list-read-later~,
+  ~gnus-inbox-list-archived~, and
+  ~gnus-inbox-list-deleted~ show marked articles in the current
+  Summary, including articles hidden by the normal display predicate.
+
+The three marks are mutually exclusive and do not change Gnus read or tick
+state.  A group's ordinary Summary acts as its inbox: once an article gets one
+of these marks, it no longer appears in the default list.  The marks are stored in
+Gnus group information in =~/.newsrc.eld=.  Actions in an =nnvirtual= or
+=nnselect= group resolve to the original source group.  Configure
+~gnus-cache-remove-articles~ to =nil= if archived copies must remain in the
+cache when articles are later marked read.
+
+~gnus-inbox-enable~ uses ~[gnus-inbox-visible-p]~ as the groups' =display=
+parameter.  New groups inherit the same rule through ~gnus-parameters~.
+Adding =%uA= to ~gnus-summary-line-format~ displays =A= for archived
+articles.  =%uL= displays =L= for read-later articles, and =%uT=
+displays =D= for locally deleted articles.  These marks are visible when
+listing those dispositions; the ordinary inbox hides them.
+
+~gnus-inbox-enable~ installs Summary keys: =a= archives, =d= or =k=
+deletes locally, =l= sets aside for later, and =u= restores the article
+to the inbox.  =C-c C-r= also restores an article.  =!= retains its
+native Gnus tick behavior.
+
+If ~gnus-thread-reader~ is installed, enabling inbox also installs =a=,
+=l= and =k= in its reading view.  Either package may be loaded first;
+gnus-inbox does not require the optional reader to be installed.
+
+* Tests
+
+#+begin_src sh
+emacs -Q --batch -L . -l tests/gnus-inbox-test.el -f ert-run-tests-batch-and-exit
+#+end_src
+
+Licensed under GPL version 3 or later; see COPYING.
