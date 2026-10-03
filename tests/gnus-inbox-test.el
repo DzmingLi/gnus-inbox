@@ -69,6 +69,7 @@
         (progn
           (delete-file file)
           (cl-letf (((symbol-function 'gnus-get-info) (lambda (_) info))
+                    ((symbol-function 'gnus-virtual-group-p) (lambda (_) nil))
                     ((symbol-function 'gnus-inbox--source)
                      (lambda (_) '("example" . 12)))
                     ((symbol-function 'gnus-cache-file-name)
@@ -93,5 +94,37 @@
       (dolist (mark '(read-later archive trash))
         (gnus-inbox--disposition '("example" . 12) mark)
         (should-not (gnus-inbox-visible-p))))))
+
+(ert-deftest gnus-inbox-virtual-dispositions-survive-native-summary-save ()
+  (require 'nnvirtual)
+  (let* ((source (gnus-info-make "example" 2 nil nil))
+         (virtual (gnus-info-make "nnvirtual:timeline" 2 nil nil))
+         (nnvirtual-current-group "timeline")
+         (nnvirtual-component-groups '("example"))
+         (nnvirtual-mapping-offsets [("example" . 0)])
+         (nnvirtual-mapping-table (list [20 0 1 21 0])))
+    (with-temp-buffer
+      (setq-local gnus-newsgroup-name "nnvirtual:timeline")
+      (setq-local gnus-newsgroup-unseen nil)
+      (dolist (entry gnus-article-mark-lists)
+        (set (make-local-variable
+              (intern (format "gnus-newsgroup-%s" (car entry)))) nil))
+      (cl-letf (((symbol-function 'gnus-get-info)
+                 (lambda (group) (if (equal group "example") source virtual)))
+                ((symbol-function 'gnus-virtual-group-p)
+                 (lambda (group) (equal group "nnvirtual:timeline")))
+                ((symbol-function 'gnus-check-backend-function) (lambda (&rest _) nil)))
+        (dolist (mark '(trash read-later archive))
+          (gnus-inbox--disposition '("example" . 12) mark)
+          (gnus-update-marks)
+          ;; This is the real nnvirtual save path, which clears component
+          ;; marks and replaces them with the virtual group's snapshot.
+          (nnvirtual-update-read-and-marked nil nil)
+          (should (gnus-inbox--marked-p '("example" . 12) mark))
+          (should (gnus-inbox--marked-p '("nnvirtual:timeline" . 13) mark)))
+        (gnus-inbox--disposition '("example" . 12) nil)
+        (gnus-update-marks)
+        (nnvirtual-update-read-and-marked nil nil)
+        (should-not (gnus-inbox--marked-p '("example" . 12) 'archive))))))
 
 ;;; gnus-inbox-test.el ends here

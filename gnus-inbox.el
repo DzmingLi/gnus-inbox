@@ -1,7 +1,7 @@
 ;;; gnus-inbox.el --- Process every Gnus group as an inbox -*- lexical-binding: t; -*-
 
 ;; Author: Lee
-;; Version: 0.1.0
+;; Version: 0.1.1
 ;; URL: https://github.com/DzmingLi/gnus-inbox
 ;; Package-Requires: ((emacs "30.1"))
 ;; SPDX-License-Identifier: GPL-3.0-or-later
@@ -143,7 +143,17 @@
                         ('trash 'gnus-newsgroup-trashed))))
         (when variable
           (make-local-variable variable)
-          (set variable numbers))))))
+          (set variable numbers))))
+    ;; nnvirtual writes its complete marks snapshot back to component groups
+    ;; on Summary exit/reselection.  Keep that snapshot and the live Summary
+    ;; lists current, or it will erase the mark just stored on SOURCE.
+    (when (and (not (equal gnus-newsgroup-name (car source)))
+               (gnus-virtual-group-p gnus-newsgroup-name))
+      (let ((virtual-number (nnvirtual-reverse-map-article
+                             (car source) number)))
+        (when virtual-number
+          (gnus-inbox--set-mark (cons gnus-newsgroup-name virtual-number)
+                               mark enabled))))))
 
 (defun gnus-inbox--article (&optional article)
   "Return ARTICLE or the one under point in the current Summary."
