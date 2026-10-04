@@ -99,10 +99,14 @@
   (require 'nnvirtual)
   (let* ((source (gnus-info-make "example" 2 nil nil))
          (virtual (gnus-info-make "nnvirtual:timeline" 2 nil nil))
+         (gnus-newsrc-hashtb (make-hash-table :test #'equal))
          (nnvirtual-current-group "timeline")
          (nnvirtual-component-groups '("example"))
          (nnvirtual-mapping-offsets [("example" . 0)])
          (nnvirtual-mapping-table (list [20 0 1 21 0])))
+    ;; Native-compiled Gnus inlines gnus-get-info; populate its real table.
+    (puthash "example" (list "example" source) gnus-newsrc-hashtb)
+    (puthash "nnvirtual:timeline" (list "nnvirtual:timeline" virtual) gnus-newsrc-hashtb)
     (with-temp-buffer
       (setq-local gnus-newsgroup-name "nnvirtual:timeline")
       (setq-local gnus-newsgroup-unseen nil)
@@ -126,5 +130,45 @@
         (gnus-update-marks)
         (nnvirtual-update-read-and-marked nil nil)
         (should-not (gnus-inbox--marked-p '("example" . 12) 'archive))))))
+
+(defun gnus-inbox-test--viewport (deleted point-line top-line)
+  "Filter DELETED from a time-sorted Summary and return its viewport."
+  (save-window-excursion
+    (with-temp-buffer
+      (switch-to-buffer (current-buffer))
+      (let ((gnus-newsgroup-display #'ignore)
+            (order '(90 4 71 8 63 12 55 16 47 20 39 24)))
+        (cl-labels ((render (numbers)
+                      (erase-buffer)
+                      (dolist (number numbers)
+                        (insert (propertize (format "  [0: Author] Subject %d\n" number)
+                                            'gnus-number number)))))
+          (render order)
+          (goto-char (point-min))
+          (forward-line top-line)
+          (set-window-start (selected-window) (point) t)
+          (forward-line (- point-line top-line))
+          (cl-letf (((symbol-function 'gnus-summary-limit-to-display-predicate)
+                     (lambda ()
+                       (render (cl-set-difference order deleted))
+                       ;; Simulate Gnus choosing a distant successor
+                       ;; and losing window-start while regenerating Summary.
+                       (goto-char (point-max))
+                       (forward-line -1)
+                       (set-window-start (selected-window) (point-min) t))))
+            (gnus-inbox--refresh-inbox))
+          (list (gnus-summary-article-number)
+                (save-excursion
+                  (goto-char (window-start (selected-window)))
+                  (gnus-summary-article-number))))))))
+
+(ert-deftest gnus-inbox-filter-keeps-visible-successor-and-top ()
+  (should (equal (gnus-inbox-test--viewport '(63) 4 2) '(12 71))))
+
+(ert-deftest gnus-inbox-filter-replaces-deleted-top-with-successor ()
+  (should (equal (gnus-inbox-test--viewport '(71) 2 2) '(8 8))))
+
+(ert-deftest gnus-inbox-filter-last-article-selects-visible-predecessor ()
+  (should (equal (gnus-inbox-test--viewport '(24) 11 2) '(39 71))))
 
 ;;; gnus-inbox-test.el ends here

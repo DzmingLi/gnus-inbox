@@ -1,7 +1,7 @@
 ;;; gnus-inbox.el --- Process every Gnus group as an inbox -*- lexical-binding: t; -*-
 
 ;; Author: Lee
-;; Version: 0.1.1
+;; Version: 0.1.2
 ;; URL: https://github.com/DzmingLi/gnus-inbox
 ;; Package-Requires: ((emacs "30.1"))
 ;; SPDX-License-Identifier: GPL-3.0-or-later
@@ -165,10 +165,67 @@
   (dolist (other '(read-later archive trash))
     (gnus-inbox--set-mark source other (eq other mark))))
 
+(defun gnus-inbox--visible-rows ()
+  "Return visible Summary articles as (NUMBER . POSITION), in screen order."
+  (save-excursion
+    (goto-char (point-min))
+    (let (rows)
+      (while (not (eobp))
+        (let ((number (gnus-summary-article-number)))
+          (when (and number (not (invisible-p (point))))
+            (push (cons number (point)) rows)))
+        (forward-line 1))
+      (nreverse rows))))
+
 (defun gnus-inbox--refresh-inbox ()
-  "Apply the current group's inbox display predicate, when present."
+  "Apply the inbox predicate without jumping to a distant article.
+Choose a surviving article in the existing screen order, and retain each
+Summary window's top article across Gnus's complete buffer regeneration."
   (when gnus-newsgroup-display
-    (gnus-summary-limit-to-display-predicate)))
+    (let* ((rows (gnus-inbox--visible-rows))
+           (line (line-beginning-position))
+           (candidates (append (cl-remove-if (lambda (row) (< (cdr row) line)) rows)
+                               (reverse (cl-remove-if-not
+                                         (lambda (row) (< (cdr row) line)) rows))))
+           (windows
+            (mapcar
+             (lambda (window)
+               (let* ((start (window-start window))
+                      (following (cl-remove-if (lambda (row) (< (cdr row) start)) rows))
+                      (offset (and following
+                                   (count-lines start (cdar following)))))
+                 (list window following offset (window-hscroll window)
+                       (window-vscroll window t))))
+             (get-buffer-window-list (current-buffer) nil t)))
+           ;; Filtering is a local disposition, not a request to center the
+           ;; currently displayed article in every regenerated Summary.
+           (gnus-auto-center-summary nil))
+      (gnus-summary-limit-to-display-predicate)
+      (let* ((remaining (gnus-inbox--visible-rows))
+             (positions (make-hash-table :test #'eql))
+             target)
+        (dolist (row remaining)
+          (puthash (car row) (cdr row) positions))
+        (setq target (cl-find-if (lambda (row) (gethash (car row) positions))
+                                candidates))
+        (when target
+          (goto-char (gethash (car target) positions))
+          (gnus-summary-position-point))
+        (dolist (state windows)
+          (pcase-let ((`(,window ,following ,offset ,hscroll ,vscroll) state))
+            (when (window-live-p window)
+              (let ((top (cl-find-if (lambda (row) (gethash (car row) positions))
+                                     following)))
+                (when top
+                  (save-excursion
+                    (goto-char (gethash (car top) positions))
+                    ;; Retain headings above a surviving top article; if
+                    ;; that article was removed, its successor fills the gap.
+                    (when (eq top (car following))
+                      (forward-line (- offset)))
+                    (set-window-start window (point) t)))
+                (set-window-hscroll window hscroll)
+                (set-window-vscroll window vscroll t)))))))))
 
 (defun gnus-inbox-read-later (&optional article)
   "Set ARTICLE aside for later without changing its read or tick mark."

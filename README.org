@@ -25,6 +25,8 @@ for existing groups and a fallback rule for groups subscribed later.
   records an =archive= mark in the source group's Gnus state.
 - ~gnus-inbox-delete~ records a separate =trash= mark and hides
   the article locally.  It does not delete anything from a remote site.
+  Filtering keeps the Summary viewport and selects the next visible article
+  (or the previous one at the end), rather than jumping through the list.
 - ~gnus-inbox-restore~ clears all three marks.
 - ~gnus-inbox-list-read-later~,
   ~gnus-inbox-list-archived~, and
