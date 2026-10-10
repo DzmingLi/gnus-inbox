@@ -1,7 +1,7 @@
 ;;; gnus-inbox.el --- Process every Gnus group as an inbox -*- lexical-binding: t; -*-
 
 ;; Author: Lee
-;; Version: 0.1.2
+;; Version: 0.1.3
 ;; URL: https://github.com/DzmingLi/gnus-inbox
 ;; Package-Requires: ((emacs "30.1"))
 ;; SPDX-License-Identifier: GPL-3.0-or-later

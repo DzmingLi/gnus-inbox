@@ -57,10 +57,36 @@ If ~gnus-thread-reader~ is installed, enabling inbox also installs =a=,
 =l= and =k= in its reading view.  Either package may be loaded first;
 gnus-inbox does not require the optional reader to be installed.
 
+* Combined inbox timeline
+
+Load the bundled timeline after enabling inbox:
+
+#+begin_src emacs-lisp
+(require 'gnus-timeline)
+#+end_src
+
+A Gnus timeline built on =gnus-inbox=. Opening Gnus displays the timeline
+automatically. It combines level 1 and 2 source groups in
+=nnvirtual:timeline= and labels the two sections.
+Read later, archive, delete, and inbox visibility are handled by
+=gnus-inbox=; the timeline does not store separate article state.
+
+Other groups can be opened using Gnus commands or =gnus-group-picker=.
+
+Completed background sources queue a foreground list update after a brief
+pause in input. Closely spaced completions share one rebuild using the
+latest source state; pending keyboard input takes priority. Native Summary
+rendering still runs on the main thread, while article buffers and their
+pending image callbacks remain intact.
+
+Background refreshes preserve the selected source article and viewport,
+even when virtual article numbers change. If that article disappears,
+the next surviving article is selected, or the previous one at the end.
+
 * Tests
 
 #+begin_src sh
-emacs -Q --batch -L . -l tests/gnus-inbox-test.el -f ert-run-tests-batch-and-exit
+emacs -Q --batch -L . -l tests/gnus-inbox-test.el -l tests/gnus-timeline-test.el -f ert-run-tests-batch-and-exit
 #+end_src
 
 Licensed under GPL version 3 or later; see COPYING.
